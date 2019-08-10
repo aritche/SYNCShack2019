@@ -3,6 +3,7 @@ import numpy as np
 import pyautogui as pag
 import time
 import matplotlib.pyplot as plt
+import sys
 
 pag.PAUSE = 0
 pag.FAILSAFE = False
@@ -51,8 +52,33 @@ def getLargestCentroid(im):
 
     return [-1,-1]
 
+if (sys.argv[1] == 0):
+    LOW_LIGHT = True
+else:
+    LOW_LIGHT = False
+
+verbose = input("Show what camera sees? [Y|N]:")
+show_camera = False
+if verbose == 'Y':
+   show_camera = True 
+
 cap = cv2.VideoCapture(0)
-ret, curr = cap.read()
+for i in range(24):
+    ret, curr = cap.read()
+
+# Get keyboard position
+hsv = cv2.cvtColor(curr, cv2.COLOR_BGR2HSV)
+lower_keyboard = np.array([79,0,0])
+upper_keyboard = np.array([167,229,65])
+res = cv2.inRange(hsv, lower_keyboard, upper_keyboard)
+kernel = np.ones((16,16))
+res = cv2.morphologyEx(res, cv2.MORPH_CLOSE, kernel)
+kernel = np.ones((20,20))
+res = cv2.morphologyEx(res, cv2.MORPH_OPEN, kernel)
+
+# Find the convex hull around the keyboard
+keyboard_mask, dims = largestConvexHull(res, curr)
+key_x, key_y, key_w, key_h = dims
 
 HIST_LIMIT = 2
 DIFF_LIMIT = 10
@@ -68,12 +94,16 @@ LOCK_MAX = 20
 tap_lock = LOCK_MAX
 while True:
     # For calculating FPS
-    start_time = time.time()
+    #start_time = time.time()
 
     # Update prev and curr frames
     prev = curr_bw
     ret, curr = cap.read()
     curr_bw = cv2.cvtColor(curr, cv2.COLOR_BGR2GRAY)
+
+    if (show_camera == True):
+        cv2.imshow('Camera', curr)
+        cv2.waitKey(1)
 
     # Calculate difference between frames
     diff = curr_bw - prev
@@ -105,40 +135,23 @@ while True:
     if (len(max_means) >= MEAN_LIMIT):
         max_means.pop(0)
 
-    #print(max_mean)
-    #print(max_means[-1])
-    #print(max_means)
     if (len(mean_hist) == 10):
-        #if ((max_means.count(max_mean) >= 4 and (max_means[0] < max_means[1] and max_means[-1] < max_means[-2])) or max_means.count(max_mean) == MEAN_LIMIT):
         if (max_means.count(max(max_means)) >= 4 and max(max_means) >= 5.6 and max(max_means) <= 5.9):
-        #if (max_means.count(max(max_means)) >= 4 and (max_means[0] < max_means[1] or max_means[-1] < max_means[2])):
             if (tap_lock <= 0):
                 pag.click()
-                print("tapped??\n")
+                print("Tap detected.\n")
                 tap_lock = LOCK_MAX
     
     hsv = cv2.cvtColor(curr, cv2.COLOR_BGR2HSV)
 
-    #lower_hand = np.array([41,57,83])
-    #upper_hand = np.array([81,93,161])
-    
     # Isolate the hand via HSV region selection
-    lower_hand = np.array([59,0,120])
-    upper_hand = np.array([137,110,255])
+    if LOW_LIGHT == True:
+        lower_hand = np.array([41,57,83])
+        upper_hand = np.array([81,93,161])
+    else:
+        lower_hand = np.array([59,0,120])
+        upper_hand = np.array([137,110,255])
     mask_hand = cv2.inRange(curr, lower_hand, upper_hand)
-
-    # Isolate the keyboard via HSV region selection
-    lower_keyboard = np.array([79,0,0])
-    upper_keyboard = np.array([167,229,65])
-    res = cv2.inRange(hsv, lower_keyboard, upper_keyboard)
-    kernel = np.ones((16,16))
-    res = cv2.morphologyEx(res, cv2.MORPH_CLOSE, kernel)
-    kernel = np.ones((20,20))
-    res = cv2.morphologyEx(res, cv2.MORPH_OPEN, kernel)
-
-    # Find the convex hull around the keyboard
-    keyboard_mask, dims = largestConvexHull(res, curr)
-    key_x, key_y, key_w, key_h = dims
 
     # Only keep pixels where both hand and keyboard are present
     # (i.e. only keep finger pixels within the keyboard)
@@ -146,7 +159,6 @@ while True:
 
     # Extract the tip of the finger
     x, y = getLargestCentroid(np.uint8(both))
-
 
     if (x != -1 and y != -1):
         # Adjust X so it is measured relative to a cropped horizontal keyboard area
@@ -180,5 +192,5 @@ while True:
         # Move the mouse
         pag.moveTo(sum(hist_x)/len(hist_x), sum(hist_y)/len(hist_y))
 
-    fps.append(1.0 / (time.time() - start_time))
+    #fps.append(1.0 / (time.time() - start_time))
     #print(sum(fps) / len(fps))
