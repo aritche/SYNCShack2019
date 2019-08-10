@@ -56,14 +56,15 @@ ret, curr = cap.read()
 
 HIST_LIMIT = 2
 DIFF_LIMIT = 10
-MEAN_LIMIT = 4
+MEAN_LIMIT = 10
 hist_x = []
 hist_y = []
 fps = []
 diff_hist = []
 mean_hist = []
+max_means = []
 curr_bw = cv2.cvtColor(curr, cv2.COLOR_BGR2GRAY)
-LOCK_MAX = 10
+LOCK_MAX = 20
 tap_lock = LOCK_MAX
 while True:
     # For calculating FPS
@@ -100,11 +101,21 @@ while True:
     # Check if a tap action is performed
     tap_lock -= 1
     max_mean = max(mean_hist)
-    if (mean_hist.count(max_mean) >= 3 and (max_mean > 2.7 and max_mean < 4.4)):
-        if (tap_lock <= 0):
-            pag.click()
-            print("tapped??\n")
-            tap_lock = LOCK_MAX
+    max_means.append(max_mean)
+    if (len(max_means) >= MEAN_LIMIT):
+        max_means.pop(0)
+
+    #print(max_mean)
+    #print(max_means[-1])
+    #print(max_means)
+    if (len(mean_hist) == 10):
+        #if ((max_means.count(max_mean) >= 4 and (max_means[0] < max_means[1] and max_means[-1] < max_means[-2])) or max_means.count(max_mean) == MEAN_LIMIT):
+        if (max_means.count(max(max_means)) >= 4 and max(max_means) >= 5.6 and max(max_means) <= 5.9):
+        #if (max_means.count(max(max_means)) >= 4 and (max_means[0] < max_means[1] or max_means[-1] < max_means[2])):
+            if (tap_lock <= 0):
+                pag.click()
+                print("tapped??\n")
+                tap_lock = LOCK_MAX
     
     hsv = cv2.cvtColor(curr, cv2.COLOR_BGR2HSV)
 
@@ -147,7 +158,7 @@ while True:
             rel_x = 0
         
         # Adjust Y so it is measured relative to a cropped vertical keyboard area
-        min_y, max_y = [310, 390]
+        min_y, max_y = [310, 370]
         rel_y = (y - min_y) / (max_y - min_y)
         if rel_y > 1:
             rel_y = 1
@@ -170,4 +181,4 @@ while True:
         pag.moveTo(sum(hist_x)/len(hist_x), sum(hist_y)/len(hist_y))
 
     fps.append(1.0 / (time.time() - start_time))
-    print(sum(fps) / len(fps))
+    #print(sum(fps) / len(fps))
